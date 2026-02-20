@@ -45,6 +45,16 @@ jobs:
 
           ls -la dist
 
+      - name: Move modules-latest tag to current commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f modules-latest "$GITHUB_SHA"
+          git push --force origin refs/tags/modules-latest
+
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
@@ -52,3 +62,4 @@ jobs:
           name: Latest Module Assets
           files: dist/*
           overwrite_files: true
+          make_latest: true
