@@ -63,48 +63,48 @@ jobs:
             fi
           fi
 
-          detect_json="$(python - <<'PY'
-import glob
-import json
-import os
+            detect_json="$(python - <<'PY'
+            import glob
+            import json
+            import os
 
-mode = os.environ["MODE"]
-changed_file_list = os.environ["CHANGED_FILE_LIST"]
+            mode = os.environ["MODE"]
+            changed_file_list = os.environ["CHANGED_FILE_LIST"]
 
-changed_files = None
-if mode != "all":
-    with open(changed_file_list, encoding="utf-8") as handle:
-        changed_files = set(line.strip() for line in handle if line.strip())
+            changed_files = None
+            if mode != "all":
+              with open(changed_file_list, encoding="utf-8") as handle:
+                changed_files = set(line.strip() for line in handle if line.strip())
 
-modules = []
-for manifest in sorted(glob.glob("*/module.json")):
-    module_dir = manifest.split("/")[0]
+            modules = []
+            for manifest in sorted(glob.glob("*/module.json")):
+              module_dir = manifest.split("/")[0]
 
-    if changed_files is not None:
-        prefix = f"{module_dir}/"
-        if not any(path.startswith(prefix) for path in changed_files):
-            continue
+              if changed_files is not None:
+                prefix = f"{module_dir}/"
+                if not any(path.startswith(prefix) for path in changed_files):
+                  continue
 
-    with open(manifest, encoding="utf-8") as handle:
-        data = json.load(handle)
+              with open(manifest, encoding="utf-8") as handle:
+                data = json.load(handle)
 
-    module_id = str(data.get("id", "")).strip()
-    version_raw = str(data.get("version", "")).strip()
+              module_id = str(data.get("id", "")).strip()
+              version_raw = str(data.get("version", "")).strip()
 
-    if not module_id or not version_raw:
-        raise SystemExit(f"Invalid module manifest: {manifest} (id/version required)")
+              if not module_id or not version_raw:
+                raise SystemExit(f"Invalid module manifest: {manifest} (id/version required)")
 
-    tag_version = version_raw if version_raw.startswith("v") else f"v{version_raw}"
-    modules.append({
-        "module_dir": module_dir,
-        "module_id": module_id,
-        "version": version_raw,
-        "tag": f"{module_dir}/{tag_version}"
-    })
+              tag_version = version_raw if version_raw.startswith("v") else f"v{version_raw}"
+              modules.append({
+                "module_dir": module_dir,
+                "module_id": module_id,
+                "version": version_raw,
+                "tag": f"{module_dir}/{tag_version}"
+              })
 
-print(json.dumps(modules, separators=(",", ":")))
-PY
-          )"
+            print(json.dumps(modules, separators=(",", ":")))
+            PY
+            )"
 
           has_modules="false"
           if [ "$detect_json" != "[]" ]; then
