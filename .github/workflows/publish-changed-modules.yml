@@ -184,6 +184,7 @@ jobs:
           cp "$module_dir/module.json" "dist/${module_id}-module.json"
 
           python - <<'PY'
+          import html as html_lib
           import json
           import re
           import urllib.request
@@ -198,30 +199,49 @@ jobs:
           if not verified or "." not in verified:
             raise SystemExit(f"Missing or invalid compatibility.verified in {module_dir}/module.json")
 
-          with urllib.request.urlopen("https://foundryvtt.com/releases/") as response:
+          request = urllib.request.Request(
+            "https://foundryvtt.com/releases/",
+            headers={"User-Agent": "Mozilla/5.0 (compatible; FoundryVTT-BadgeBot/1.0)"}
+          )
+          with urllib.request.urlopen(request, timeout=20) as response:
             releases_html = response.read().decode("utf-8", errors="ignore")
 
+          plain_text = re.sub(r"(?is)<script.*?>.*?</script>", " ", releases_html)
+          plain_text = re.sub(r"(?is)<style.*?>.*?</style>", " ", plain_text)
+          plain_text = re.sub(r"<[^>]+>", " ", plain_text)
+          plain_text = html_lib.unescape(plain_text)
+          plain_text = re.sub(r"\s+", " ", plain_text).strip()
+
           stable_versions = []
-          stable_pattern = re.compile(r"Release\s+(\d+\.\d+).*?(?:Update|Full)\s+Stable", re.IGNORECASE | re.DOTALL)
-          for match in stable_pattern.findall(releases_html):
-            major_str, minor_str = match.split(".", 1)
-            stable_versions.append((int(major_str), int(minor_str), match))
+          for match in re.finditer(r"Release\s+(\d+\.\d+)", plain_text, re.IGNORECASE):
+            version = match.group(1)
+            lookahead = plain_text[match.end():match.end() + 120]
+            if not re.search(r"\b(?:Update|Full)\s+Stable\b", lookahead, re.IGNORECASE):
+              continue
+
+            major_str, minor_str = version.split(".", 1)
+            stable_versions.append((int(major_str), int(minor_str), version))
 
           if not stable_versions:
-            raise SystemExit("Unable to determine Foundry stable releases from https://foundryvtt.com/releases/")
-
-          latest_major, latest_minor, latest_stable = max(stable_versions)
-
           verified_major_str, verified_minor_str = verified.split(".", 1)
           verified_major = int(verified_major_str)
           verified_minor = int(verified_minor_str)
 
-          if verified_major == latest_major and verified_minor == latest_minor:
-            color = "brightgreen"
-          elif verified_major == latest_major:
+          if not stable_versions:
+            latest_major = verified_major
+            latest_minor = verified_minor
+            latest_stable = verified
             color = "yellow"
+            print("Warning: Unable to parse stable releases from https://foundryvtt.com/releases/; defaulting badge color to yellow.")
           else:
-            color = "red"
+            latest_major, latest_minor, latest_stable = max(stable_versions)
+
+            if verified_major == latest_major and verified_minor == latest_minor:
+              color = "brightgreen"
+            elif verified_major == latest_major:
+              color = "yellow"
+            else:
+              color = "red"
 
           badge = {
             "schemaVersion": 1,
