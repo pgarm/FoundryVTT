@@ -8,7 +8,15 @@ async function connectToFoundryBrowser() {
 }
 
 async function getMainPage(browser) {
-  const context = browser.contexts()[0];
+  let context = browser.contexts()[0];
+  if (!context) {
+    try {
+      context = await browser.newContext();
+    } catch {
+      throw new Error("No browser context found in CDP session. Open a Foundry tab in the remote browser and try again.");
+    }
+  }
+
   const existingPages = context.pages();
   const foundryPage = existingPages.find(page => page.url().includes("localhost:30000"));
   if (foundryPage) return foundryPage;

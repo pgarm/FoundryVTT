@@ -7,7 +7,7 @@ module.exports = defineConfig({
     timeout: 10000
   },
   use: {
-    headless: false
+    headless: process.env.PLAYWRIGHT_HEADLESS === "false" ? false : true
   },
   reporter: [["list"]]
 });

@@ -63,9 +63,10 @@ This repository is intended for local module development.
 
 ### Release workflow (monorepo)
 
-- Per-module CD is triggered by tag push in the format `<module-folder>/<version>`.
+- Per-module releases are built and published automatically on push to the `main` branch.
+- Release tags are used for record-keeping only, in the format `<module-folder>/<version>`.
 	- Example: `squeeze-it/v1.0.1`
-- Each tagged release publishes versioned assets for that module.
+- Each successful release publishes versioned assets for that module.
 - The workflow also updates a rolling release tag `modules-latest` used by Foundry install/update URLs.
 - A separate manual workflow can republish all modules to `modules-latest` for coordinated global updates.
 

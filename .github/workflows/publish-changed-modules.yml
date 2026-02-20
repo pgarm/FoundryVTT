@@ -126,7 +126,7 @@ PY
       max-parallel: 1
       matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
     concurrency:
-      group: publish-${{ matrix.module_id }}-modules-latest
+      group: publish-modules-latest
       cancel-in-progress: false
     steps:
       - name: Checkout
@@ -149,7 +149,13 @@ PY
           git fetch --tags --force
 
           if git rev-parse -q --verify "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "Tag '$tag' already exists. Keeping existing record tag."
+            tag_sha="$(git rev-list -n 1 "$tag")"
+            if [ "$tag_sha" != "$GITHUB_SHA" ]; then
+              echo "Tag '$tag' already exists and points to a different commit ($tag_sha)."
+              echo "Refusing to publish to preserve release audit integrity."
+              exit 1
+            fi
+            echo "Tag '$tag' already exists for this commit. Continuing idempotent publish."
             exit 0
           fi
 
