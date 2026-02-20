@@ -34,7 +34,7 @@ test("connect to Edge CDP and detect Foundry UI", async () => {
   }
 });
 
-test("squeeze setting persists and tooltip renders line break", async () => {
+test("squeeze setting persists and tooltip renders multiple sections", async () => {
   const browser = await connectToFoundryBrowser();
   try {
     const page = await getMainPage(browser);
