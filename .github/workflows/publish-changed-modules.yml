@@ -67,6 +67,7 @@ jobs:
           import glob
           import json
           import os
+          import re
 
           mode = os.environ["MODE"]
           changed_file_list = os.environ["CHANGED_FILE_LIST"]
@@ -82,7 +83,17 @@ jobs:
 
             if changed_files is not None:
               prefix = f"{module_dir}/"
-              if not any(path.startswith(prefix) for path in changed_files):
+              module_changed_paths = [path for path in changed_files if path.startswith(prefix)]
+              if not module_changed_paths:
+                continue
+
+              release_relevant_paths = [
+                path
+                for path in module_changed_paths
+                if not re.fullmatch(fr"{re.escape(module_dir)}/(?:README\.md|CHANGELOG\.md)", path, flags=re.IGNORECASE)
+              ]
+
+              if not release_relevant_paths:
                 continue
 
             with open(manifest, encoding="utf-8") as handle:
