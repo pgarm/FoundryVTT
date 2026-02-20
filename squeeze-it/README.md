@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/pgarm/FoundryVTT/actions/workflows/ci.yml/badge.svg)](https://github.com/pgarm/FoundryVTT/actions/workflows/ci.yml)
 [![Local Integration Report](https://github.com/pgarm/FoundryVTT/actions/workflows/report-local-integration.yml/badge.svg)](https://github.com/pgarm/FoundryVTT/actions/workflows/report-local-integration.yml)
+[![Foundry Verified](https://img.shields.io/badge/dynamic/json?color=orange&label=Foundry%20Verified&query=compatibility.verified&url=https%3A%2F%2Fgithub.com%2Fpgarm%2FFoundryVTT%2Freleases%2Fdownload%2Fmodules-latest%2Fsqueeze-it-module.json)](https://github.com/pgarm/FoundryVTT/releases/download/modules-latest/squeeze-it-module.json)
+[![Foundry Minimum](https://img.shields.io/badge/dynamic/json?color=blue&label=Foundry%20Minimum&query=compatibility.minimum&url=https%3A%2F%2Fgithub.com%2Fpgarm%2FFoundryVTT%2Freleases%2Fdownload%2Fmodules-latest%2Fsqueeze-it-module.json)](https://github.com/pgarm/FoundryVTT/releases/download/modules-latest/squeeze-it-module.json)
 
 Squeeze It extends FoundryVTT Region behavior configuration for DnD5e by adding size-aware squeeze rules on top of Modify Movement Cost.
 
