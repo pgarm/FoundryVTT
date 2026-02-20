@@ -26,7 +26,7 @@ This repository supports independent module release cadence.
 
 ### Unified release flow
 
-- Workflow: `publish-module-from-tag.yml` (workflow name: **Publish changed modules**)
+- Workflow: `publish-changed-modules.yml` (workflow name: **Publish changed modules**)
 - Trigger:
   - Automatically on push to `main`
   - Manually via `workflow_dispatch` (`scope=changed|all`)

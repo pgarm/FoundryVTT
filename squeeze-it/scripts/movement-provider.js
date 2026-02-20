@@ -28,7 +28,6 @@ export function registerMovementBehaviorPatch() {
     if (comparison === "smaller") return [];
     if (comparison === "equal") return effects;
     if (comparison === "larger") return [{ name: "difficulty", difficulty: Infinity }];
-    return effects;
   };
 
   klass.prototype[PATCH_FLAG] = true;

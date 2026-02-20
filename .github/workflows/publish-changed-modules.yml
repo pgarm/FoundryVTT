@@ -1,32 +1,31 @@
-name: Publish module from tag
 name: Publish changed modules
+
 on:
   push:
-    tags:
     branches: [main]
+  workflow_dispatch:
     inputs:
-      module:
       scope:
-        description: Publish changed modules from last main push or all modules
+        description: Publish changed modules from the latest change-set or all modules
         required: true
         default: changed
         type: choice
         options:
           - changed
           - all
+
 permissions:
   contents: write
 
 jobs:
-  publish:
   detect:
-    steps:
+    runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.detect.outputs.matrix }}
       has_modules: ${{ steps.detect.outputs.has_modules }}
+    steps:
       - name: Checkout
         uses: actions/checkout@v4
-
         with:
           fetch-depth: 0
 
@@ -36,40 +35,51 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-            mode="changed"
-            before_sha="${{ github.event.before }}"
-          else
+          mode="changed"
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             mode="${{ inputs.scope }}"
-            before_sha=""
+          fi
+
+          changed_file_list="$CHANGED_FILE_LIST"
+          : > "$changed_file_list"
+
+          if [ "$mode" = "all" ]; then
+            : > "$changed_file_list"
+          else
+            before_sha="${{ github.event.before }}"
+
+            if [ -z "$before_sha" ] || [ "$before_sha" = "0000000000000000000000000000000000000000" ]; then
+              if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+                before_sha="$(git rev-parse HEAD^)"
+              else
+                before_sha=""
+              fi
+            fi
+
+            if [ -n "$before_sha" ]; then
+              git diff --name-only "$before_sha" "$GITHUB_SHA" > "$changed_file_list"
+            else
+              git ls-tree -r --name-only "$GITHUB_SHA" > "$changed_file_list"
+            fi
           fi
 
           detect_json="$(python - <<'PY'
 import glob
 import json
 import os
-import subprocess
 
 mode = os.environ["MODE"]
-before_sha = os.environ.get("BEFORE_SHA", "")
-after_sha = os.environ["GITHUB_SHA"]
+changed_file_list = os.environ["CHANGED_FILE_LIST"]
 
-if mode == "all":
-    changed_files = None
-else:
-    if before_sha and before_sha != "0000000000000000000000000000000000000000":
-        output = subprocess.check_output([
-            "git", "diff", "--name-only", before_sha, after_sha
-        ], text=True)
-    else:
-        output = subprocess.check_output([
-            "git", "ls-tree", "-r", "--name-only", after_sha
-        ], text=True)
-    changed_files = set(line.strip() for line in output.splitlines() if line.strip())
+changed_files = None
+if mode != "all":
+    with open(changed_file_list, encoding="utf-8") as handle:
+        changed_files = set(line.strip() for line in handle if line.strip())
 
 modules = []
 for manifest in sorted(glob.glob("*/module.json")):
     module_dir = manifest.split("/")[0]
+
     if changed_files is not None:
         prefix = f"{module_dir}/"
         if not any(path.startswith(prefix) for path in changed_files):
@@ -104,8 +114,8 @@ PY
           echo "matrix={\"include\":$detect_json}" >> "$GITHUB_OUTPUT"
           echo "has_modules=$has_modules" >> "$GITHUB_OUTPUT"
         env:
-          MODE: ${{ github.event_name == 'push' && 'changed' || inputs.scope }}
-          BEFORE_SHA: ${{ github.event.before }}
+          MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.scope || 'changed' }}
+          CHANGED_FILE_LIST: ${{ runner.temp }}/changed-files.txt
 
   publish:
     runs-on: ubuntu-latest
@@ -116,36 +126,40 @@ PY
       max-parallel: 1
       matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
     concurrency:
-      group: publish-${{ matrix.module_id }}
+      group: publish-${{ matrix.module_id }}-modules-latest
       cancel-in-progress: false
-      - name: Resolve release inputs
-        id: resolve
-        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-        run: |
+
       - name: Validate module manifest
-          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
-            tag="${GITHUB_REF_NAME}"
-            module_dir="${tag%%/*}"
+        shell: bash
+        run: |
+          set -euo pipefail
           python -m json.tool "${{ matrix.module_dir }}/module.json" > /dev/null
 
       - name: Create module tag (record-keeping)
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${{ matrix.tag }}"
 
           git fetch --tags --force
 
-          tag="${{ matrix.tag }}"
-            echo "Tag '$tag' already exists."
-            exit 1
-          fi
-
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null 2>&1; then
             echo "Tag '$tag' already exists. Keeping existing record tag."
             exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git tag "$tag" "$GITHUB_SHA"
           git push origin "$tag"
 
-      - name: Package tagged module
+      - name: Package module assets
         id: package
         shell: bash
         run: |
@@ -154,7 +168,6 @@ PY
           module_id="${{ matrix.module_id }}"
 
           mkdir -p dist
-          python -m json.tool "$module_dir/module.json" > /dev/null
           cp "$module_dir/module.json" "dist/${module_id}-module.json"
 
           (

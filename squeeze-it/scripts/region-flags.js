@@ -11,7 +11,7 @@ const MOVEMENT_BEHAVIOR_IDS = new Set([
 
 function asJQuery(element) {
   const jq = globalThis.jQuery ?? globalThis.$;
-  if (!jq) throw new Error("Foundry jQuery unavailable");
+  if (!jq) return null;
   if (element?.jquery) return element;
   return jq(element);
 }
@@ -96,6 +96,8 @@ function collectBehaviorHints(app, html) {
   }
 
   hints.push(app.title, app.options?.title);
+  if (!$html) return hints.filter(Boolean);
+
   const header = ($html.find(".window-title").text() || "").trim();
   hints.push(header);
 
@@ -118,6 +120,7 @@ function injectBehaviorSheet(app, html) {
   if (!isMovementBehaviorSheet(app, html)) return;
 
   const $html = asJQuery(html);
+  if (!$html) return;
   const selectedValue = getBehaviorFlagValue(app.document ?? app.object);
 
   const target =
