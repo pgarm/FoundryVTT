@@ -1,0 +1,54 @@
+name: Publish Foundry module assets
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-assets:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Package module assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          shopt -s nullglob
+          for manifest in */module.json; do
+            module_dir="$(dirname "$manifest")"
+            module_id="$(python -c "import json;print(json.load(open('$manifest', encoding='utf-8'))['id'])")"
+
+            echo "Packaging ${module_id} from ${module_dir}"
+
+            python -m json.tool "$manifest" > /dev/null
+            cp "$manifest" "dist/${module_id}-module.json"
+
+            (
+              cd "$module_dir"
+              zip -r "../dist/${module_id}.zip" . \
+                -x "*.DS_Store" \
+                -x "*.git*" \
+                -x "node_modules/*" \
+                -x "tests/*" \
+                -x "tools/*" \
+                -x ".vscode/*" \
+                -x ".copilot/*"
+            )
+          done
+
+          ls -la dist
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: modules-latest
+          name: Latest Module Assets
+          files: dist/*
+          overwrite_files: true
