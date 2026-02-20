@@ -2,7 +2,10 @@
   "id": "squeeze-it",
   "title": "Squeezing & Crawlspace Rules",
   "description": "Implements size-based squeezing, movement cost, and region-based crawlspace logic.",
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "system": [
+    "dnd5e"
+  ],
   "compatibility": {
     "minimum": "13",
     "verified": "13.351",
@@ -11,7 +14,9 @@
   "url": "https://github.com/pgarm/FoundryVTT",
   "manifest": "https://github.com/pgarm/FoundryVTT/releases/download/modules-latest/squeeze-it-module.json",
   "download": "https://github.com/pgarm/FoundryVTT/releases/download/modules-latest/squeeze-it.zip",
+  "license": "https://github.com/pgarm/FoundryVTT/blob/main/LICENSE",
   "readme": "https://github.com/pgarm/FoundryVTT/blob/main/squeeze-it/README.md",
+  "changelog": "https://github.com/pgarm/FoundryVTT/blob/main/squeeze-it/CHANGELOG.md",
   "bugs": "https://github.com/pgarm/FoundryVTT/issues",
   "authors": [
     {
