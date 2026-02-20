@@ -142,6 +142,8 @@ jobs:
 
       - name: Create module tag (record-keeping)
         shell: bash
+        env:
+          PUBLISH_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.scope || 'changed' }}
         run: |
           set -euo pipefail
           tag="${{ matrix.tag }}"
@@ -151,11 +153,16 @@ jobs:
           if git rev-parse -q --verify "refs/tags/$tag" >/dev/null 2>&1; then
             tag_sha="$(git rev-list -n 1 "$tag")"
             if [ "$tag_sha" != "$GITHUB_SHA" ]; then
-              echo "Tag '$tag' already exists and points to a different commit ($tag_sha)."
-              echo "Refusing to publish to preserve release audit integrity."
-              exit 1
+              if [ "$PUBLISH_SCOPE" = "all" ]; then
+                echo "Tag '$tag' already exists at $tag_sha (scope=all; skipping integrity check, tag stays put)."
+              else
+                echo "Tag '$tag' already exists and points to a different commit ($tag_sha)."
+                echo "Refusing to publish to preserve release audit integrity."
+                exit 1
+              fi
+            else
+              echo "Tag '$tag' already exists for this commit. Continuing idempotent publish."
             fi
-            echo "Tag '$tag' already exists for this commit. Continuing idempotent publish."
             exit 0
           fi
 
