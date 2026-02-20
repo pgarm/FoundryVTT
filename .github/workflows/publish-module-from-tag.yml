@@ -1,0 +1,199 @@
+name: Publish module from tag
+name: Publish changed modules
+on:
+  push:
+    tags:
+    branches: [main]
+    inputs:
+      module:
+      scope:
+        description: Publish changed modules from last main push or all modules
+        required: true
+        default: changed
+        type: choice
+        options:
+          - changed
+          - all
+permissions:
+  contents: write
+
+jobs:
+  publish:
+  detect:
+    steps:
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      has_modules: ${{ steps.detect.outputs.has_modules }}
+      - name: Checkout
+        uses: actions/checkout@v4
+
+        with:
+          fetch-depth: 0
+
+      - name: Detect modules to publish
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            mode="changed"
+            before_sha="${{ github.event.before }}"
+          else
+            mode="${{ inputs.scope }}"
+            before_sha=""
+          fi
+
+          detect_json="$(python - <<'PY'
+import glob
+import json
+import os
+import subprocess
+
+mode = os.environ["MODE"]
+before_sha = os.environ.get("BEFORE_SHA", "")
+after_sha = os.environ["GITHUB_SHA"]
+
+if mode == "all":
+    changed_files = None
+else:
+    if before_sha and before_sha != "0000000000000000000000000000000000000000":
+        output = subprocess.check_output([
+            "git", "diff", "--name-only", before_sha, after_sha
+        ], text=True)
+    else:
+        output = subprocess.check_output([
+            "git", "ls-tree", "-r", "--name-only", after_sha
+        ], text=True)
+    changed_files = set(line.strip() for line in output.splitlines() if line.strip())
+
+modules = []
+for manifest in sorted(glob.glob("*/module.json")):
+    module_dir = manifest.split("/")[0]
+    if changed_files is not None:
+        prefix = f"{module_dir}/"
+        if not any(path.startswith(prefix) for path in changed_files):
+            continue
+
+    with open(manifest, encoding="utf-8") as handle:
+        data = json.load(handle)
+
+    module_id = str(data.get("id", "")).strip()
+    version_raw = str(data.get("version", "")).strip()
+
+    if not module_id or not version_raw:
+        raise SystemExit(f"Invalid module manifest: {manifest} (id/version required)")
+
+    tag_version = version_raw if version_raw.startswith("v") else f"v{version_raw}"
+    modules.append({
+        "module_dir": module_dir,
+        "module_id": module_id,
+        "version": version_raw,
+        "tag": f"{module_dir}/{tag_version}"
+    })
+
+print(json.dumps(modules, separators=(",", ":")))
+PY
+          )"
+
+          has_modules="false"
+          if [ "$detect_json" != "[]" ]; then
+            has_modules="true"
+          fi
+
+          echo "matrix={\"include\":$detect_json}" >> "$GITHUB_OUTPUT"
+          echo "has_modules=$has_modules" >> "$GITHUB_OUTPUT"
+        env:
+          MODE: ${{ github.event_name == 'push' && 'changed' || inputs.scope }}
+          BEFORE_SHA: ${{ github.event.before }}
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: detect
+    if: needs.detect.outputs.has_modules == 'true'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJson(needs.detect.outputs.matrix) }}
+    concurrency:
+      group: publish-${{ matrix.module_id }}
+      cancel-in-progress: false
+      - name: Resolve release inputs
+        id: resolve
+        shell: bash
+        with:
+          fetch-depth: 0
+        run: |
+      - name: Validate module manifest
+          if [ "${GITHUB_EVENT_NAME}" = "push" ]; then
+            tag="${GITHUB_REF_NAME}"
+            module_dir="${tag%%/*}"
+          python -m json.tool "${{ matrix.module_dir }}/module.json" > /dev/null
+
+      - name: Create module tag (record-keeping)
+
+          git fetch --tags --force
+
+          tag="${{ matrix.tag }}"
+            echo "Tag '$tag' already exists."
+            exit 1
+          fi
+
+            echo "Tag '$tag' already exists. Keeping existing record tag."
+            exit 0
+
+          git tag "$tag" "$GITHUB_SHA"
+          git push origin "$tag"
+
+      - name: Package tagged module
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          module_dir="${{ matrix.module_dir }}"
+          module_id="${{ matrix.module_id }}"
+
+          mkdir -p dist
+          python -m json.tool "$module_dir/module.json" > /dev/null
+          cp "$module_dir/module.json" "dist/${module_id}-module.json"
+
+          (
+            cd "$module_dir"
+            zip -r "../dist/${module_id}.zip" . \
+              -x "*.DS_Store" \
+              -x "*.git*" \
+              -x "node_modules/*" \
+              -x "tests/*" \
+              -x "tools/*" \
+              -x ".vscode/*" \
+              -x ".copilot/*"
+          )
+
+          echo "module_id=${module_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish versioned release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ matrix.tag }}
+          files: |
+            dist/${{ steps.package.outputs.module_id }}-module.json
+            dist/${{ steps.package.outputs.module_id }}.zip
+          overwrite_files: true
+
+      - name: Update rolling latest module assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: modules-latest
+          name: Latest Module Assets
+          files: |
+            dist/${{ steps.package.outputs.module_id }}-module.json
+            dist/${{ steps.package.outputs.module_id }}.zip
+          overwrite_files: true
+
+  no-changes:
+    runs-on: ubuntu-latest
+    needs: detect
+    if: needs.detect.outputs.has_modules != 'true'
+    steps:
+      - name: No changed modules
+        run: echo "No module folder changes detected; nothing to publish."

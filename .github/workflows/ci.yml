@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate module manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for manifest in */module.json; do
+            echo "Validating $manifest"
+            python -m json.tool "$manifest" > /dev/null
+          done
+
+      - name: Validate release workflow manifest discovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=$(ls -1 */module.json | wc -l)
+          if [ "$count" -lt 1 ]; then
+            echo "No module manifests found"
+            exit 1
+          fi
+          echo "Found $count module manifest(s)"
+
+      - name: Guard against local-only tracked files
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden='^(node_modules/|\.vscode/|\.copilot/|playwright-report/|test-results/|coverage/|\.idea/)'
+          tracked_forbidden=$(git ls-files | grep -E "$forbidden" || true)
+          if [ -n "$tracked_forbidden" ]; then
+            echo "Found forbidden tracked paths:"
+            echo "$tracked_forbidden"
+            exit 1
+          fi

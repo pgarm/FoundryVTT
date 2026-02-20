@@ -1,0 +1,42 @@
+name: Local Integration Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      module_id:
+        description: "Module ID (e.g. squeeze-it)"
+        required: true
+        default: "squeeze-it"
+      status:
+        description: "Result of local integration test run"
+        type: choice
+        required: true
+        options:
+          - pass
+          - fail
+      summary:
+        description: "Optional short notes"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish report summary
+        run: |
+          echo "## Local Integration Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Module: ${{ inputs.module_id }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Status: ${{ inputs.status }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "${{ inputs.summary }}" ]; then
+            echo "- Notes: ${{ inputs.summary }}" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Mark workflow failed when requested
+        if: inputs.status == 'fail'
+        run: |
+          echo "Local integration was reported as failed"
+          exit 1

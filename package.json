@@ -1,0 +1,25 @@
+{
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  },
+  "name": "foundryvtt",
+  "version": "1.0.0",
+  "description": "Scripts and modules for Foundry VTT",
+  "main": "index.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test tests/squeeze-it --headed"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pgarm/FoundryVTT.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/pgarm/FoundryVTT/issues"
+  },
+  "homepage": "https://github.com/pgarm/FoundryVTT#readme"
+}
