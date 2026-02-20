@@ -101,6 +101,10 @@ jobs:
             with open(f"dist/{module_id}-foundry-verified-badge.json", "w", encoding="utf-8") as handle:
               json.dump(badge, handle, separators=(",", ":"))
 
+            os.makedirs(".github/badges", exist_ok=True)
+            with open(f".github/badges/{module_id}-foundry-verified-badge.json", "w", encoding="utf-8") as handle:
+              json.dump(badge, handle, separators=(",", ":"))
+
             print(f"Computed badge for {module_id}: verified={verified}, latest_stable={latest_stable}, color={color}")
             PY
 
@@ -137,3 +141,18 @@ jobs:
           files: dist/*
           overwrite_files: true
           make_latest: true
+
+      - name: Commit badge file updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- .github/badges; then
+            echo "No badge file changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/badges
+          git commit -m "Update Foundry verified badge files [skip ci]"
+          git push origin HEAD:${GITHUB_REF_NAME}

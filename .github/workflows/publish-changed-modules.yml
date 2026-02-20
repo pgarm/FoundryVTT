@@ -310,3 +310,106 @@ jobs:
     steps:
       - name: No changed modules
         run: echo "No module folder changes detected; nothing to publish."
+
+  sync-badges:
+    runs-on: ubuntu-latest
+    needs: [detect, publish]
+    if: needs.detect.outputs.has_modules == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Regenerate Foundry verified badge files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import glob
+          import html as html_lib
+          import json
+          import re
+          import urllib.request
+
+          request = urllib.request.Request(
+            "https://foundryvtt.com/releases/",
+            headers={"User-Agent": "Mozilla/5.0 (compatible; FoundryVTT-BadgeBot/1.0)"}
+          )
+          with urllib.request.urlopen(request, timeout=20) as response:
+            releases_html = response.read().decode("utf-8", errors="ignore")
+
+          plain_text = re.sub(r"(?is)<script.*?>.*?</script>", " ", releases_html)
+          plain_text = re.sub(r"(?is)<style.*?>.*?</style>", " ", plain_text)
+          plain_text = re.sub(r"<[^>]+>", " ", plain_text)
+          plain_text = html_lib.unescape(plain_text)
+          plain_text = re.sub(r"\s+", " ", plain_text).strip()
+
+          stable_versions = []
+          for match in re.finditer(r"Release\s+(\d+\.\d+)", plain_text, re.IGNORECASE):
+            version = match.group(1)
+            lookahead = plain_text[match.end():match.end() + 120]
+            if not re.search(r"\b(?:Update|Full)\s+Stable\b", lookahead, re.IGNORECASE):
+              continue
+            major_str, minor_str = version.split(".", 1)
+            stable_versions.append((int(major_str), int(minor_str), version))
+
+          os_path = ".github/badges"
+          import os
+          os.makedirs(os_path, exist_ok=True)
+
+          for manifest_path in sorted(glob.glob("*/module.json")):
+            module_dir = manifest_path.split("/")[0]
+            with open(manifest_path, encoding="utf-8") as handle:
+              manifest = json.load(handle)
+
+            module_id = str(manifest.get("id", "")).strip()
+            verified = str(manifest.get("compatibility", {}).get("verified", "")).strip()
+            if not module_id or not verified or "." not in verified:
+              continue
+
+            verified_major_str, verified_minor_str = verified.split(".", 1)
+            verified_major = int(verified_major_str)
+            verified_minor = int(verified_minor_str)
+
+            if not stable_versions:
+              latest_stable = verified
+              color = "yellow"
+            else:
+              latest_major, latest_minor, latest_stable = max(stable_versions)
+              if verified_major == latest_major and verified_minor == latest_minor:
+                color = "brightgreen"
+              elif verified_major == latest_major:
+                color = "yellow"
+              else:
+                color = "red"
+
+            badge = {
+              "schemaVersion": 1,
+              "label": "Foundry verified",
+              "message": verified,
+              "color": color,
+              "cacheSeconds": 3600
+            }
+
+            out_path = f".github/badges/{module_id}-foundry-verified-badge.json"
+            with open(out_path, "w", encoding="utf-8") as handle:
+              json.dump(badge, handle, separators=(",", ":"))
+
+            print(f"Synced {out_path}: verified={verified}, latest_stable={latest_stable}, color={color}")
+          PY
+
+      - name: Commit badge file updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- .github/badges; then
+            echo "No badge file changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/badges
+          git commit -m "Update Foundry verified badge files [skip ci]"
+          git push origin HEAD:${GITHUB_REF_NAME}
