@@ -183,6 +183,60 @@ jobs:
           mkdir -p dist
           cp "$module_dir/module.json" "dist/${module_id}-module.json"
 
+          python - <<'PY'
+          import json
+          import re
+          import urllib.request
+
+          module_dir = "${{ matrix.module_dir }}"
+          module_id = "${{ matrix.module_id }}"
+
+          with open(f"{module_dir}/module.json", encoding="utf-8") as handle:
+            manifest = json.load(handle)
+
+          verified = str(manifest.get("compatibility", {}).get("verified", "")).strip()
+          if not verified or "." not in verified:
+            raise SystemExit(f"Missing or invalid compatibility.verified in {module_dir}/module.json")
+
+          with urllib.request.urlopen("https://foundryvtt.com/releases/") as response:
+            releases_html = response.read().decode("utf-8", errors="ignore")
+
+          stable_versions = []
+          stable_pattern = re.compile(r"Release\s+(\d+\.\d+).*?(?:Update|Full)\s+Stable", re.IGNORECASE | re.DOTALL)
+          for match in stable_pattern.findall(releases_html):
+            major_str, minor_str = match.split(".", 1)
+            stable_versions.append((int(major_str), int(minor_str), match))
+
+          if not stable_versions:
+            raise SystemExit("Unable to determine Foundry stable releases from https://foundryvtt.com/releases/")
+
+          latest_major, latest_minor, latest_stable = max(stable_versions)
+
+          verified_major_str, verified_minor_str = verified.split(".", 1)
+          verified_major = int(verified_major_str)
+          verified_minor = int(verified_minor_str)
+
+          if verified_major == latest_major and verified_minor == latest_minor:
+            color = "brightgreen"
+          elif verified_major == latest_major:
+            color = "yellow"
+          else:
+            color = "red"
+
+          badge = {
+            "schemaVersion": 1,
+            "label": "Foundry verified",
+            "message": verified,
+            "color": color,
+            "cacheSeconds": 3600
+          }
+
+          with open(f"dist/{module_id}-foundry-verified-badge.json", "w", encoding="utf-8") as handle:
+            json.dump(badge, handle, separators=(",", ":"))
+
+          print(f"Computed badge for {module_id}: verified={verified}, latest_stable={latest_stable}, color={color}")
+          PY
+
           (
             cd "$module_dir"
             zip -r "../dist/${module_id}.zip" . \
@@ -203,6 +257,7 @@ jobs:
           tag_name: ${{ matrix.tag }}
           files: |
             dist/${{ steps.package.outputs.module_id }}-module.json
+            dist/${{ steps.package.outputs.module_id }}-foundry-verified-badge.json
             dist/${{ steps.package.outputs.module_id }}.zip
           overwrite_files: true
           make_latest: false
@@ -224,6 +279,7 @@ jobs:
           name: Latest Module Assets
           files: |
             dist/${{ steps.package.outputs.module_id }}-module.json
+            dist/${{ steps.package.outputs.module_id }}-foundry-verified-badge.json
             dist/${{ steps.package.outputs.module_id }}.zip
           overwrite_files: true
           make_latest: true
