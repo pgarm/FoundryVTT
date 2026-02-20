@@ -70,7 +70,6 @@ jobs:
               major_str, minor_str = version.split(".", 1)
               stable_versions.append((int(major_str), int(minor_str), version))
 
-            if not stable_versions:
             verified_major_str, verified_minor_str = verified.split(".", 1)
             verified_major = int(verified_major_str)
             verified_minor = int(verified_minor_str)
