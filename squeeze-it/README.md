@@ -24,6 +24,11 @@ When Squeeze size is set to a specific size (Tiny, Small, Medium, Large, Huge, G
 - Creatures exactly the selected size: configured movement multiplier applies.
 - Creatures larger than the selected size: movement is blocked (infinite cost).
 
+### Limitations
+
+- Currently, the squeeze applies to all speeds configured on the specific behavior. E.g. if you want to have a tight passage that's ok for a small crature to walk in (and medium would be squeezing through) - but logically a small creatire should have trouble **flying** through same passsage. To implement this, you'll need to create two separate behaviors for walking and flying speed separately.
+- 
+
 ## UI behavior
 
 - Injects a Squeeze settings group in the Modify Movement Cost behavior sheet.

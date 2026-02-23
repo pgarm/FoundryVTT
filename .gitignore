@@ -33,3 +33,6 @@ __pycache__/
 
 # Local one-off helper scripts
 shared-tools/local/
+
+# Local planning notes
+MAIN_BRANCH_PROTECTION_PLAN.md
