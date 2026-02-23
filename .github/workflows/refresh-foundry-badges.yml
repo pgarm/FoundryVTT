@@ -86,6 +86,7 @@ jobs:
             badge = {
               "schemaVersion": 1,
               "label": "Foundry verified",
+              "labelColor": "#444D56",
               "message": verified,
               "color": color,
               "cacheSeconds": 3600
