@@ -249,7 +249,7 @@ jobs:
             latest_major, latest_minor, latest_stable = max(stable_versions)
 
             if verified_major == latest_major and verified_minor == latest_minor:
-              color = "brightgreen"
+              color = "#28A745"
             elif verified_major == latest_major:
               color = "yellow"
             else:
@@ -393,7 +393,7 @@ jobs:
             else:
               latest_major, latest_minor, latest_stable = max(stable_versions)
               if verified_major == latest_major and verified_minor == latest_minor:
-                color = "brightgreen"
+                color = "#28A745"
               elif verified_major == latest_major:
                 color = "yellow"
               else:
