@@ -61,10 +61,12 @@ jobs:
             plain_text = re.sub(r"\s+", " ", plain_text).strip()
 
             stable_versions = []
-            for match in re.finditer(r"Release\s+(\d+\.\d+)", plain_text, re.IGNORECASE):
+            release_matches = list(re.finditer(r"Release\s+(\d+\.\d+)", plain_text, re.IGNORECASE))
+            for index, match in enumerate(release_matches):
               version = match.group(1)
-              lookahead = plain_text[match.end():match.end() + 120]
-              if not re.search(r"\b(?:Update|Full)\s+Stable\b", lookahead, re.IGNORECASE):
+              section_end = release_matches[index + 1].start() if index + 1 < len(release_matches) else len(plain_text)
+              section_text = plain_text[match.start():section_end]
+              if not re.search(r"\b(?:Update|Full)\s+Stable\b", section_text, re.IGNORECASE):
                 continue
 
               major_str, minor_str = version.split(".", 1)
