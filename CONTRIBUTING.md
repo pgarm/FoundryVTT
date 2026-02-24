@@ -92,6 +92,34 @@ This repository supports independent module release cadence.
 - If a module has no configured token, publish continues and Foundry notification is skipped for that module.
 - Foundry API validation/rate-limit errors will fail that workflow step and include response details in logs.
 
+### GitHub App identity for automation writes
+
+Automation workflows can use a GitHub App installation token for tag/release/badge write operations.
+If App secrets are not configured, workflows fall back to the default `GITHUB_TOKEN`.
+
+#### Required secrets (repository)
+
+- `RELEASE_APP_ID`
+- `RELEASE_APP_PRIVATE_KEY`
+
+These should correspond to an installed GitHub App for this repository.
+
+#### Recommended GitHub App permissions
+
+- Repository permissions:
+  - **Contents: Read and write** (required for tags, releases, and badge JSON commits)
+  - **Metadata: Read** (standard)
+- No additional permissions are required for the current workflow behavior.
+
+#### Ruleset / branch protection guidance
+
+- If `main` is protected and you allow direct automation writes, add the GitHub App (not `github-actions[bot]`) as a bypass actor.
+- Keep workflow file changes PR-gated (recommended via CODEOWNERS for `.github/workflows/**`).
+
+#### Validation before merge
+
+- For workflow PR branches, run manual workflows with `validate_only=true` to test logic without side effects (no tag pushes, release uploads, or Foundry notifications).
+
 ## Packaging rules
 
 Release zips include only module runtime files from each module folder.

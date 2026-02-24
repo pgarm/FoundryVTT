@@ -12,10 +12,36 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
+      - name: Create GitHub App installation token
+        id: app_token
+        if: ${{ secrets.RELEASE_APP_ID != '' && secrets.RELEASE_APP_PRIVATE_KEY != '' }}
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Resolve repository auth token
+        id: repo_auth
+        shell: bash
+        env:
+          APP_TOKEN: ${{ steps.app_token.outputs.token }}
+          DEFAULT_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -n "${APP_TOKEN:-}" ]; then
+            echo "token=${APP_TOKEN}" >> "$GITHUB_OUTPUT"
+            echo "using_app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "token=${DEFAULT_TOKEN}" >> "$GITHUB_OUTPUT"
+            echo "using_app=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ steps.repo_auth.outputs.token }}
 
       - name: Recompute Foundry verified badges
         shell: bash

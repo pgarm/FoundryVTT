@@ -13,6 +13,11 @@ on:
         options:
           - changed
           - all
+      validate_only:
+        description: Validate workflow logic without pushing tags/releases or notifying Foundry
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -140,10 +145,36 @@ jobs:
       group: publish-modules-latest
       cancel-in-progress: false
     steps:
+      - name: Create GitHub App installation token
+        id: app_token
+        if: ${{ secrets.RELEASE_APP_ID != '' && secrets.RELEASE_APP_PRIVATE_KEY != '' }}
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Resolve repository auth token
+        id: repo_auth
+        shell: bash
+        env:
+          APP_TOKEN: ${{ steps.app_token.outputs.token }}
+          DEFAULT_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -n "${APP_TOKEN:-}" ]; then
+            echo "token=${APP_TOKEN}" >> "$GITHUB_OUTPUT"
+            echo "using_app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "token=${DEFAULT_TOKEN}" >> "$GITHUB_OUTPUT"
+            echo "using_app=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ steps.repo_auth.outputs.token }}
 
       - name: Validate module manifest
         shell: bash
@@ -156,9 +187,16 @@ jobs:
         shell: bash
         env:
           PUBLISH_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.scope || 'changed' }}
+          VALIDATE_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.validate_only || false }}
         run: |
           set -euo pipefail
           tag="${{ matrix.tag }}"
+
+          if [ "$VALIDATE_ONLY" = "true" ]; then
+            echo "validate_only=true: skipping tag creation."
+            echo "tag_created=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
 
           git fetch --tags --force
 
@@ -289,6 +327,7 @@ jobs:
           echo "module_id=${module_id}" >> "$GITHUB_OUTPUT"
 
       - name: Publish versioned release assets
+        if: github.event_name != 'workflow_dispatch' || inputs.validate_only != true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ matrix.tag }}
@@ -298,9 +337,10 @@ jobs:
             dist/${{ steps.package.outputs.module_id }}.zip
           overwrite_files: true
           make_latest: false
+          token: ${{ steps.repo_auth.outputs.token }}
 
       - name: Notify Foundry package release API
-        if: steps.create_tag.outputs.tag_created == 'true' && (github.event_name != 'workflow_dispatch' || inputs.scope != 'all')
+        if: steps.create_tag.outputs.tag_created == 'true' && (github.event_name != 'workflow_dispatch' || inputs.scope != 'all') && (github.event_name != 'workflow_dispatch' || inputs.validate_only != true)
         shell: bash
         env:
           FOUNDRY_RELEASE_TOKENS_JSON: ${{ secrets.FOUNDRY_RELEASE_TOKENS_JSON }}
@@ -392,6 +432,7 @@ jobs:
           PY
 
       - name: Move modules-latest tag to current commit
+        if: github.event_name != 'workflow_dispatch' || inputs.validate_only != true
         shell: bash
         run: |
           set -euo pipefail
@@ -402,6 +443,7 @@ jobs:
           git push --force origin refs/tags/modules-latest
 
       - name: Update rolling latest module assets
+        if: github.event_name != 'workflow_dispatch' || inputs.validate_only != true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: modules-latest
@@ -412,6 +454,7 @@ jobs:
             dist/${{ steps.package.outputs.module_id }}.zip
           overwrite_files: true
           make_latest: true
+          token: ${{ steps.repo_auth.outputs.token }}
 
   no-changes:
     runs-on: ubuntu-latest
@@ -426,10 +469,36 @@ jobs:
     needs: [detect, publish]
     if: needs.detect.outputs.has_modules == 'true'
     steps:
+      - name: Create GitHub App installation token
+        id: app_token
+        if: ${{ secrets.RELEASE_APP_ID != '' && secrets.RELEASE_APP_PRIVATE_KEY != '' }}
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Resolve repository auth token
+        id: repo_auth
+        shell: bash
+        env:
+          APP_TOKEN: ${{ steps.app_token.outputs.token }}
+          DEFAULT_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -n "${APP_TOKEN:-}" ]; then
+            echo "token=${APP_TOKEN}" >> "$GITHUB_OUTPUT"
+            echo "using_app=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "token=${DEFAULT_TOKEN}" >> "$GITHUB_OUTPUT"
+            echo "using_app=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ steps.repo_auth.outputs.token }}
 
       - name: Regenerate Foundry verified badge files
         shell: bash
@@ -513,6 +582,7 @@ jobs:
           PY
 
       - name: Commit badge file updates
+        if: github.event_name != 'workflow_dispatch' || inputs.validate_only != true
         shell: bash
         run: |
           set -euo pipefail
