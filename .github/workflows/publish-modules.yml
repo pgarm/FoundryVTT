@@ -2,6 +2,12 @@ name: Publish Foundry module assets
 
 on:
   workflow_dispatch:
+    inputs:
+      validate_only:
+        description: Validate workflow logic without pushing tags/releases
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -127,6 +133,7 @@ jobs:
           ls -la dist
 
       - name: Move modules-latest tag to current commit
+        if: github.event_name != 'workflow_dispatch' || inputs.validate_only != true
         shell: bash
         run: |
           set -euo pipefail
@@ -137,6 +144,7 @@ jobs:
           git push --force origin refs/tags/modules-latest
 
       - name: Upload release assets
+        if: github.event_name != 'workflow_dispatch' || inputs.validate_only != true
         uses: softprops/action-gh-release@v2
         with:
           tag_name: modules-latest
@@ -146,6 +154,7 @@ jobs:
           make_latest: true
 
       - name: Commit badge file updates
+        if: github.event_name != 'workflow_dispatch' || inputs.validate_only != true
         shell: bash
         run: |
           set -euo pipefail
