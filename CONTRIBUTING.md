@@ -112,7 +112,8 @@ This repository supports independent module release cadence.
 
 - Keep the `fvttp_` prefix in token values.
 - If a module has no configured token, publish continues and Foundry notification is skipped for that module.
-- Foundry API validation/rate-limit errors will fail that workflow step and include response details in logs.
+- Foundry API transient errors (timeouts/network issues, HTTP 429, HTTP 5xx) are retried automatically with backoff before failing.
+- Non-transient Foundry API validation errors still fail immediately and include response details in logs.
 
 #### GitHub App identity for automation writes
 
