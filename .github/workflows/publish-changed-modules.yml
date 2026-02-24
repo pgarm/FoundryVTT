@@ -152,6 +152,7 @@ jobs:
           python -m json.tool "${{ matrix.module_dir }}/module.json" > /dev/null
 
       - name: Create module tag (record-keeping)
+        id: create_tag
         shell: bash
         env:
           PUBLISH_SCOPE: ${{ github.event_name == 'workflow_dispatch' && inputs.scope || 'changed' }}
@@ -166,6 +167,7 @@ jobs:
             if [ "$tag_sha" != "$GITHUB_SHA" ]; then
               if [ "$PUBLISH_SCOPE" = "all" ]; then
                 echo "Tag '$tag' already exists at $tag_sha (scope=all; skipping integrity check, tag stays put)."
+                echo "tag_created=false" >> "$GITHUB_OUTPUT"
               else
                 echo "Tag '$tag' already exists and points to a different commit ($tag_sha)."
                 echo "Refusing to publish to preserve release audit integrity."
@@ -173,6 +175,7 @@ jobs:
               fi
             else
               echo "Tag '$tag' already exists for this commit. Continuing idempotent publish."
+              echo "tag_created=false" >> "$GITHUB_OUTPUT"
             fi
             exit 0
           fi
@@ -182,6 +185,7 @@ jobs:
 
           git tag "$tag" "$GITHUB_SHA"
           git push origin "$tag"
+          echo "tag_created=true" >> "$GITHUB_OUTPUT"
 
       - name: Package module assets
         id: package
@@ -294,6 +298,98 @@ jobs:
             dist/${{ steps.package.outputs.module_id }}.zip
           overwrite_files: true
           make_latest: false
+
+      - name: Notify Foundry package release API
+        if: steps.create_tag.outputs.tag_created == 'true' && (github.event_name != 'workflow_dispatch' || inputs.scope != 'all')
+        shell: bash
+        env:
+          FOUNDRY_RELEASE_TOKENS_JSON: ${{ secrets.FOUNDRY_RELEASE_TOKENS_JSON }}
+          MODULE_ID: ${{ matrix.module_id }}
+          MODULE_VERSION: ${{ matrix.version }}
+          MODULE_TAG: ${{ matrix.tag }}
+          REPO_NAME: ${{ github.repository }}
+          MODULE_MANIFEST_PATH: ${{ matrix.module_dir }}/module.json
+          PACKAGED_MODULE_ID: ${{ steps.package.outputs.module_id }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          tokens_raw = (os.environ.get("FOUNDRY_RELEASE_TOKENS_JSON") or "").strip()
+          module_id = os.environ["MODULE_ID"]
+
+          if not tokens_raw:
+            print("Foundry release token map secret not configured; skipping Foundry API notification.")
+            raise SystemExit(0)
+
+          try:
+            token_map = json.loads(tokens_raw)
+          except Exception as error:
+            raise SystemExit(f"Invalid FOUNDRY_RELEASE_TOKENS_JSON secret format: {error}")
+
+          token = (token_map.get(module_id) or "").strip()
+          if not token:
+            print(f"No Foundry release token configured for module '{module_id}'; skipping notification.")
+            raise SystemExit(0)
+
+          if not token.startswith("fvttp_"):
+            raise SystemExit("Foundry release token must include 'fvttp_' prefix.")
+
+          manifest_path = os.environ["MODULE_MANIFEST_PATH"]
+          with open(manifest_path, encoding="utf-8") as handle:
+            manifest_data = json.load(handle)
+
+          compatibility = manifest_data.get("compatibility") or {}
+          minimum = str(compatibility.get("minimum", "")).strip()
+          verified = str(compatibility.get("verified", "")).strip()
+          maximum = str(compatibility.get("maximum", "")).strip()
+
+          if not minimum or not verified:
+            raise SystemExit("Manifest compatibility.minimum and compatibility.verified are required for Foundry release API.")
+
+          repository = os.environ["REPO_NAME"]
+          module_tag = os.environ["MODULE_TAG"]
+          packaged_module_id = os.environ["PACKAGED_MODULE_ID"]
+
+          release_manifest_url = f"https://github.com/{repository}/releases/download/{module_tag}/{packaged_module_id}-module.json"
+          release_notes_url = f"https://github.com/{repository}/releases/tag/{module_tag}"
+
+          payload = {
+            "id": module_id,
+            "release": {
+              "version": os.environ["MODULE_VERSION"],
+              "manifest": release_manifest_url,
+              "notes": release_notes_url,
+              "compatibility": {
+                "minimum": minimum,
+                "verified": verified,
+                "maximum": maximum
+              }
+            }
+          }
+
+          request = urllib.request.Request(
+            "https://foundryvtt.com/_api/packages/release_version/",
+            data=json.dumps(payload).encode("utf-8"),
+            method="POST",
+            headers={
+              "Content-Type": "application/json",
+              "Authorization": token,
+              "User-Agent": "FoundryVTT-Release-Automation/1.0"
+            }
+          )
+
+          try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+              response_text = response.read().decode("utf-8", errors="replace")
+              print(f"Foundry release API response ({response.status}): {response_text}")
+          except urllib.error.HTTPError as error:
+            details = error.read().decode("utf-8", errors="replace")
+            raise SystemExit(f"Foundry release API request failed ({error.code}): {details}")
+          PY
 
       - name: Move modules-latest tag to current commit
         shell: bash
