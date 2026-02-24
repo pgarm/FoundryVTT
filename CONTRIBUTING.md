@@ -73,6 +73,25 @@ This repository supports independent module release cadence.
 - Manually run `publish-modules.yml` to republish all module assets to `modules-latest`.
 - Use this for synchronized compatibility/version refreshes.
 
+### Foundry Package Release API automation
+
+- `publish-changed-modules.yml` notifies Foundry's Package Release API only for true new module releases.
+- Notification is sent only when a new module version tag is created during publish.
+- Manual republish/refresh runs (`scope=all`) do **not** trigger Foundry release notifications.
+
+#### Required secret setup
+
+- Secret name: `FOUNDRY_RELEASE_TOKENS_JSON`
+- Store this as a JSON object mapping module IDs to Foundry package release tokens:
+  - Example: `{"squeeze-it":"fvttp_xxx","another-module":"fvttp_yyy"}`
+- Token values are obtained from each package page on foundryvtt.com (Package Release Token field).
+
+#### Notes
+
+- Keep the `fvttp_` prefix in token values.
+- If a module has no configured token, publish continues and Foundry notification is skipped for that module.
+- Foundry API validation/rate-limit errors will fail that workflow step and include response details in logs.
+
 ## Packaging rules
 
 Release zips include only module runtime files from each module folder.
