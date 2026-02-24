@@ -116,6 +116,13 @@ These should correspond to an installed GitHub App for this repository.
 - If `main` is protected and you allow direct automation writes, add the GitHub App (not `github-actions[bot]`) as a bypass actor.
 - Keep workflow file changes PR-gated (recommended via CODEOWNERS for `.github/workflows/**`).
 
+#### Pull request rules (solo-maintainer setup)
+
+- GitHub does not count author self-reviews toward required approvals.
+- In a solo-owner repo, keep PR review requirements enabled and use a bypass role (typically `Repository admins`) for owner-authored PR merges.
+- Keep `.github/CODEOWNERS` with `* @pgarm` so PRs from other contributors require code-owner review by `@pgarm`.
+- If bypass is removed, lower required approvals to `0` to avoid locking owner-authored PRs.
+
 #### Validation before merge
 
 - For workflow PR branches, run manual workflows with `validate_only=true` to test logic without side effects (no tag pushes, release uploads, or Foundry notifications).
