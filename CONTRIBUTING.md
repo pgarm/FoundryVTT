@@ -1,6 +1,7 @@
 # Contributing
 
-Thanks for contributing to this FoundryVTT monorepo.
+Thanks for contributing to this FoundryVTT modules repo.
+This repository is primarily maintainer-authored for new module development; external contributions are currently expected to be focused bugfixes and small maintenance improvements.
 
 ## For External Contributors
 
@@ -25,10 +26,21 @@ Thanks for contributing to this FoundryVTT monorepo.
 ### Pull request expectations
 
 - Keep changes scoped and module-focused.
+- External PRs should focus on bugfixes, compatibility fixes, docs, and small quality improvements.
+- Do not add new modules in external PRs unless explicitly requested by maintainers.
 - Update module README and/or manifest when behavior or release metadata changes.
 - Ensure tests pass locally for affected modules.
 
 ## For Maintainers
+
+Maintainers own module roadmap, new module creation, release policy, and repository automation.
+
+### Adding new modules
+
+- New modules are maintainer-driven and should be added as top-level folders containing `module.json`.
+- Include module README and required runtime assets in the module folder.
+- Ensure release workflows can package the module without introducing root-level dev/editor artifacts.
+- Add or update tests in `tests/<module-id>` when applicable.
 
 ### Release model (monorepo)
 
