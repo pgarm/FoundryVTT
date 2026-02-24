@@ -99,8 +99,9 @@ This repository supports independent module release cadence.
 
 - Workflow: `monitor-foundry-compat-alert.yml` (scheduled daily and runnable manually).
 - It checks all module `compatibility.verified` values against the latest Foundry stable release.
-- If any module is non-green, it creates/updates a GitHub issue titled **Foundry compatibility alert: <foundry-version>** and assigns it to repository owners.
-- When all modules return to green, the workflow automatically closes that alert issue.
+- If any module is non-green, it ensures a single open issue for the latest release titled **Foundry compatibility alert: <foundry-version>** and assigns it to repository owners.
+- If Foundry advances again before retesting completes, the workflow opens/updates the latest-version issue and auto-closes older compatibility alert issues.
+- When all modules return to green, the workflow automatically closes all open compatibility alert issues.
 
 #### Foundry Package Release API automation
 

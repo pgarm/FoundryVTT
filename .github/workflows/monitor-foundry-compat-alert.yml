@@ -170,7 +170,8 @@ jobs:
               per_page: 100
             });
 
-            const existing = openIssues.find(issue => !issue.pull_request && (issue.body || '').includes(marker));
+            const alertIssues = openIssues.filter(issue => !issue.pull_request && (issue.body || '').includes(marker));
+            const existing = alertIssues.find(issue => issue.title === title);
 
             if (existing) {
               await github.rest.issues.update({
@@ -192,6 +193,28 @@ jobs:
               core.info(`Created alert issue #${created.data.number}`);
             }
 
+            const stillOpen = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100
+            });
+            const activeAlerts = stillOpen.filter(issue => !issue.pull_request && (issue.body || '').includes(marker));
+
+            for (const issue of activeAlerts) {
+              if (issue.title === title) {
+                continue;
+              }
+
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: issue.number,
+                state: 'closed'
+              });
+              core.info(`Closed previous compatibility alert issue #${issue.number}`);
+            }
+
       - name: Close existing alert issue when all green
         if: steps.scan.outputs.non_green_count == '0'
         uses: actions/github-script@v7
@@ -211,17 +234,19 @@ jobs:
               per_page: 100
             });
 
-            const existing = openIssues.find(issue => !issue.pull_request && (issue.body || '').includes(marker));
-            if (!existing) {
-              core.info('No open compatibility alert issue to close.');
+            const alertIssues = openIssues.filter(issue => !issue.pull_request && (issue.body || '').includes(marker));
+            if (alertIssues.length === 0) {
+              core.info('No open compatibility alert issues to close.');
               return;
             }
 
-            await github.rest.issues.update({
-              owner,
-              repo,
-              issue_number: existing.number,
-              body,
-              state: 'closed'
-            });
-            core.info(`Closed alert issue #${existing.number}`);
+            for (const issue of alertIssues) {
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: issue.number,
+                body,
+                state: 'closed'
+              });
+              core.info(`Closed alert issue #${issue.number}`);
+            }
