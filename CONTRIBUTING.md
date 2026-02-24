@@ -95,6 +95,13 @@ This repository supports independent module release cadence.
 - Manually run `publish-modules.yml` to republish all module assets to `modules-latest`.
 - Use this for synchronized compatibility/version refreshes.
 
+#### Compatibility alert automation
+
+- Workflow: `monitor-foundry-compat-alert.yml` (scheduled daily and runnable manually).
+- It checks all module `compatibility.verified` values against the latest Foundry stable release.
+- If any module is non-green, it creates/updates a GitHub issue titled **Foundry compatibility alert** and assigns it to repository owners.
+- When all modules return to green, the workflow automatically closes that alert issue.
+
 #### Foundry Package Release API automation
 
 - `publish-changed-modules.yml` notifies Foundry's Package Release API only for true new module releases.

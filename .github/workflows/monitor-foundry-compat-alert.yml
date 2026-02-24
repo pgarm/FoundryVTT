@@ -1,0 +1,226 @@
+name: Monitor Foundry compatibility
+
+on:
+  schedule:
+    - cron: "0 10 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Evaluate module compatibility status
+        id: scan
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .github/tmp
+          python - <<'PY'
+          import glob
+          import html as html_lib
+          import json
+          import os
+          import re
+          import urllib.request
+          from datetime import datetime, timezone
+
+          request = urllib.request.Request(
+            "https://foundryvtt.com/releases/",
+            headers={"User-Agent": "Mozilla/5.0 (compatible; FoundryVTT-CompatMonitor/1.0)"}
+          )
+          with urllib.request.urlopen(request, timeout=20) as response:
+            releases_html = response.read().decode("utf-8", errors="ignore")
+
+          plain_text = re.sub(r"(?is)<script.*?>.*?</script>", " ", releases_html)
+          plain_text = re.sub(r"(?is)<style.*?>.*?</style>", " ", plain_text)
+          plain_text = re.sub(r"<[^>]+>", " ", plain_text)
+          plain_text = html_lib.unescape(plain_text)
+          plain_text = re.sub(r"\s+", " ", plain_text).strip()
+
+          stable_versions = []
+          release_matches = list(re.finditer(r"Release\s+(\d+\.\d+)", plain_text, re.IGNORECASE))
+          for index, match in enumerate(release_matches):
+            version = match.group(1)
+            section_end = release_matches[index + 1].start() if index + 1 < len(release_matches) else len(plain_text)
+            section_text = plain_text[match.start():section_end]
+            if not re.search(r"\b(?:Update|Full)\s+Stable\b", section_text, re.IGNORECASE):
+              continue
+
+            major_str, minor_str = version.split(".", 1)
+            stable_versions.append((int(major_str), int(minor_str), version))
+
+          if not stable_versions:
+            raise SystemExit("Unable to determine latest stable Foundry release from https://foundryvtt.com/releases/")
+
+          latest_major, latest_minor, latest_stable = max(stable_versions)
+
+          non_green = []
+          for manifest_path in sorted(glob.glob("*/module.json")):
+            module_dir = manifest_path.split("/")[0]
+            with open(manifest_path, encoding="utf-8") as handle:
+              manifest = json.load(handle)
+
+            module_id = str(manifest.get("id", "")).strip() or module_dir
+            verified = str(manifest.get("compatibility", {}).get("verified", "")).strip()
+
+            if not verified or "." not in verified:
+              non_green.append({
+                "module": module_id,
+                "verified": verified or "(missing)",
+                "status": "red",
+                "reason": "missing/invalid compatibility.verified"
+              })
+              continue
+
+            verified_major_str, verified_minor_str = verified.split(".", 1)
+            verified_major = int(verified_major_str)
+            verified_minor = int(verified_minor_str)
+
+            if verified_major == latest_major and verified_minor == latest_minor:
+              status = "green"
+              reason = "up-to-date"
+            elif verified_major == latest_major:
+              status = "yellow"
+              reason = "same major, older minor"
+            else:
+              status = "red"
+              reason = "older major"
+
+            if status != "green":
+              non_green.append({
+                "module": module_id,
+                "verified": verified,
+                "status": status,
+                "reason": reason
+              })
+
+          report_path = ".github/tmp/foundry-compat-alert.md"
+          now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+          if non_green:
+            lines = [
+              "<!-- foundry-compat-alert -->",
+              "# Foundry compatibility alert",
+              "",
+              f"Latest Foundry stable detected: **{latest_stable}**",
+              f"Detected at: {now}",
+              "",
+              "The following modules are not green and should be locally validated against the latest Foundry stable release:",
+              "",
+              "| Module | Verified | Status | Reason |",
+              "|---|---:|---|---|"
+            ]
+
+            for item in non_green:
+              lines.append(f"| {item['module']} | {item['verified']} | {item['status']} | {item['reason']} |")
+
+            lines.extend([
+              "",
+              "After compatibility is validated/updated and the release workflows publish updated metadata, this alert issue is auto-closed by the monitor workflow."
+            ])
+          else:
+            lines = [
+              "<!-- foundry-compat-alert -->",
+              "# Foundry compatibility status",
+              "",
+              f"All modules are green against Foundry stable **{latest_stable}**.",
+              f"Checked at: {now}"
+            ]
+
+          with open(report_path, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(lines) + "\n")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+            output.write(f"non_green_count={len(non_green)}\n")
+            output.write(f"latest_stable={latest_stable}\n")
+            output.write(f"report_path={report_path}\n")
+          PY
+
+      - name: Add run summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat "${{ steps.scan.outputs.report_path }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Create or update alert issue
+        if: steps.scan.outputs.non_green_count != '0'
+        uses: actions/github-script@v7
+        env:
+          ALERT_TITLE: Foundry compatibility alert
+          ALERT_BODY_PATH: ${{ steps.scan.outputs.report_path }}
+        with:
+          script: |
+            const fs = require('fs');
+            const title = process.env.ALERT_TITLE;
+            const body = fs.readFileSync(process.env.ALERT_BODY_PATH, 'utf8');
+
+            const { owner, repo } = context.repo;
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100
+            });
+
+            const existing = openIssues.find(issue => issue.title === title && !issue.pull_request);
+
+            if (existing) {
+              await github.rest.issues.update({
+                owner,
+                repo,
+                issue_number: existing.number,
+                body
+              });
+              core.info(`Updated alert issue #${existing.number}`);
+            } else {
+              const created = await github.rest.issues.create({
+                owner,
+                repo,
+                title,
+                body,
+                assignees: [owner]
+              });
+              core.info(`Created alert issue #${created.data.number}`);
+            }
+
+      - name: Close existing alert issue when all green
+        if: steps.scan.outputs.non_green_count == '0'
+        uses: actions/github-script@v7
+        env:
+          ALERT_TITLE: Foundry compatibility alert
+          ALERT_BODY_PATH: ${{ steps.scan.outputs.report_path }}
+        with:
+          script: |
+            const fs = require('fs');
+            const title = process.env.ALERT_TITLE;
+            const body = fs.readFileSync(process.env.ALERT_BODY_PATH, 'utf8');
+
+            const { owner, repo } = context.repo;
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100
+            });
+
+            const existing = openIssues.find(issue => issue.title === title && !issue.pull_request);
+            if (!existing) {
+              core.info('No open compatibility alert issue to close.');
+              return;
+            }
+
+            await github.rest.issues.update({
+              owner,
+              repo,
+              issue_number: existing.number,
+              body,
+              state: 'closed'
+            });
+            core.info(`Closed alert issue #${existing.number}`);
