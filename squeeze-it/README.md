@@ -10,10 +10,7 @@ Squeeze It extends FoundryVTT Region behavior configuration for DnD5e by adding 
 
 - Adds a new Squeeze group to Region Behavior config when editing a Modify Movement Cost behavior.
 - Adds a Size selector with all DnD5e creature sizes plus All.
-
-![Squeeze It Region Config](docs/images/squeeze-it-region-config.gif)
-
-- Applies movement rules dynamically based on the selected squeeze size. 
+- Applies movement rules dynamically based on the selected squeeze size.
 
 ![Squeeze It Region Use](docs/images/squeeze-it-region-use.gif)
 
