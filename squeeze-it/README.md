@@ -12,6 +12,8 @@ Squeeze It extends FoundryVTT Region behavior configuration for DnD5e by adding 
 - Adds a Size selector with all DnD5e creature sizes plus All.
 - Applies movement rules dynamically based on the selected squeeze size.
 
+![Squeeze It Region Use](docs/images/squeeze-it-region-use.gif)
+
 ## Squeeze Size Rules
 
 When Squeeze size is set to All:
@@ -27,7 +29,8 @@ When Squeeze size is set to a specific size (Tiny, Small, Medium, Large, Huge, G
 ### Limitations
 
 - Currently, the squeeze applies to all speeds configured on the specific behavior. E.g. if you want to have a tight passage that's ok for a small crature to walk in (and medium would be squeezing through) - but logically a small creatire should have trouble **flying** through same passsage. To implement this, you'll need to create two separate behaviors for walking and flying speed separately.
-- 
+- Works best if the **region** is aligned to grid square edges - otherwise entering the area may produce unintended results (e.g. first square in the region won't apply the modifier if the square is not fully within the region).
+- Currently default Foundry behavior of "token can spill through the wall" for large creatires still applies.
 
 ## UI behavior
 
@@ -41,40 +44,6 @@ When Squeeze size is set to a specific size (Tiny, Small, Medium, Large, Huge, G
 
 - FoundryVTT: v13
 - System: dnd5e (2014 rules, v1 compatible data shape)
-
-## Installation (local development)
-
-This repository is intended for local module development.
-
-1. Place or sync the squeeze-it folder into your Foundry Data modules directory.
-2. Enable Squeeze It in your world module settings.
-3. Open a Region, add or edit a Modify Movement Cost behavior, and configure Squeeze > Size.
-
-## Development and testing
-
-- Playwright UI checks are available in the root workspace test suite.
-- Core coverage includes:
-	- Foundry connection and module activation checks
-	- Squeeze size persistence after save/reopen
-	- Tooltip content rendering checks
-
-### Badge workflows
-
-- CI badge: automatic cloud-safe checks on push/PR.
-- Local Integration Report badge: manually triggered from GitHub Actions (`workflow_dispatch`) after local Foundry integration tests.
-- For local integration reporting, run the workflow and set:
-	- `module_id` to the module tested
-	- `status` to `pass` or `fail`
-	- optional summary notes
-
-### Release workflow (monorepo)
-
-- Per-module releases are built and published automatically on push to the `main` branch.
-- Release tags are used for record-keeping only, in the format `<module-folder>/<version>`.
-	- Example: `squeeze-it/v1.0.1`
-- Each successful release publishes versioned assets for that module.
-- The workflow also updates a rolling release tag `modules-latest` used by Foundry install/update URLs.
-- A separate manual workflow can republish all modules to `modules-latest` for coordinated global updates.
 
 ## License
 
