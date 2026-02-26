@@ -55,9 +55,17 @@ This repository supports independent module release cadence.
 - Behavior:
   - Detects module folders changed in the merge/push to `main`
   - Reads each changed module's `id` and `version` from `module.json`
+  - In `scope=changed`, only publishes a module when its `module.json` version changed in the merged range
   - Creates a record tag per changed module (`<module-folder>/v<version>`)
   - Publishes module assets to that tag release
   - Updates rolling module assets on `modules-latest`
+
+#### Version bump gate policy
+
+- Release intent is controlled by `module.json` version changes.
+- Non-release paths (`README.md`, `CHANGELOG.md`, `docs/**`) do not trigger per-version release in changed mode.
+- PRs that modify release-relevant module files without changing that module's `module.json` version are blocked by CI.
+- To merge release-relevant module changes, manually bump the module version in `module.json` (semantic part is maintainer choice).
 
 #### Release checklist (local vs GitHub web)
 

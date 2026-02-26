@@ -41,6 +41,7 @@ jobs:
           set -euo pipefail
 
           mode="changed"
+          before_sha=""
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             mode="${{ inputs.scope }}"
           fi
@@ -68,14 +69,38 @@ jobs:
             fi
           fi
 
+          export BASE_SHA="$before_sha"
+
           detect_json="$(python - <<'PY'
           import glob
           import json
           import os
           import re
+          import subprocess
 
           mode = os.environ["MODE"]
           changed_file_list = os.environ["CHANGED_FILE_LIST"]
+          base_sha = os.environ.get("BASE_SHA", "").strip()
+
+          def manifest_version_at(revision, manifest_path):
+            if not revision:
+              return None
+
+            result = subprocess.run(
+              ["git", "show", f"{revision}:{manifest_path}"],
+              capture_output=True,
+              text=True,
+            )
+            if result.returncode != 0:
+              return None
+
+            try:
+              data = json.loads(result.stdout)
+            except Exception:
+              return None
+
+            version = str(data.get("version", "")).strip()
+            return version or None
 
           changed_files = None
           if mode != "all":
@@ -112,6 +137,11 @@ jobs:
 
             if not module_id or not version_raw:
               raise SystemExit(f"Invalid module manifest: {manifest} (id/version required)")
+
+            if changed_files is not None and mode == "changed":
+              base_version = manifest_version_at(base_sha, manifest)
+              if base_version == version_raw:
+                continue
 
             tag_version = version_raw if version_raw.startswith("v") else f"v{version_raw}"
             modules.append({

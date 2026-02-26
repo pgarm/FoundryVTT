@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -54,3 +56,100 @@ jobs:
             echo "$tracked_forbidden"
             exit 1
           fi
+
+      - name: Require module version bump for release-relevant PR changes
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin "$BASE_SHA" "$HEAD_SHA" || true
+
+          python - <<'PY'
+          import glob
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+
+          base_sha = os.environ["BASE_SHA"].strip()
+          head_sha = os.environ["HEAD_SHA"].strip()
+
+          changed_paths_output = subprocess.check_output(
+            ["git", "diff", "--name-only", base_sha, head_sha],
+            text=True,
+          )
+          changed_files = set(path.strip() for path in changed_paths_output.splitlines() if path.strip())
+
+          violations = []
+
+          def manifest_version_at(revision: str, manifest_path: str):
+            result = subprocess.run(
+              ["git", "show", f"{revision}:{manifest_path}"],
+              capture_output=True,
+              text=True,
+            )
+            if result.returncode != 0:
+              return None
+
+            try:
+              data = json.loads(result.stdout)
+            except Exception:
+              return None
+
+            version = str(data.get("version", "")).strip()
+            return version or None
+
+          for manifest in sorted(glob.glob("*/module.json")):
+            module_dir = manifest.split("/")[0]
+            module_prefix = f"{module_dir}/"
+
+            module_changed_paths = sorted(path for path in changed_files if path.startswith(module_prefix))
+            if not module_changed_paths:
+              continue
+
+            release_relevant_paths = [
+              path
+              for path in module_changed_paths
+              if not (
+                re.fullmatch(fr"{re.escape(module_dir)}/(?:README\.md|CHANGELOG\.md)", path, flags=re.IGNORECASE)
+                or path.startswith(f"{module_dir}/docs/")
+              )
+            ]
+
+            if not release_relevant_paths:
+              continue
+
+            head_version = manifest_version_at(head_sha, manifest)
+            base_version = manifest_version_at(base_sha, manifest)
+
+            if head_version is None:
+              violations.append(
+                (module_dir, release_relevant_paths, "unable to read head manifest version")
+              )
+              continue
+
+            if base_version == head_version:
+              violations.append(
+                (
+                  module_dir,
+                  release_relevant_paths,
+                  f"version unchanged ({head_version})",
+                )
+              )
+
+          if violations:
+            print("Release-relevant module changes require a module.json version bump:\n")
+            for module_dir, paths, reason in violations:
+              print(f"- {module_dir}: {reason}")
+              for path in paths:
+                print(f"    - {path}")
+            print("\nUpdate the affected module's module.json version before merging.")
+            sys.exit(1)
+
+          print("Version bump gate passed for all release-relevant module changes.")
+          PY
