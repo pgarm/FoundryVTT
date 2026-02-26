@@ -95,7 +95,10 @@ jobs:
               release_relevant_paths = [
                 path
                 for path in module_changed_paths
-                if not re.fullmatch(fr"{re.escape(module_dir)}/(?:README\.md|CHANGELOG\.md)", path, flags=re.IGNORECASE)
+                if not (
+                  re.fullmatch(fr"{re.escape(module_dir)}/(?:README\.md|CHANGELOG\.md)", path, flags=re.IGNORECASE)
+                  or path.startswith(f"{module_dir}/docs/")
+                )
               ]
 
               if not release_relevant_paths:
